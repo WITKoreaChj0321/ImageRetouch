@@ -1,0 +1,26 @@
+# 학습 데이터 (용량 큼, 개인정보)
+data/
+
+# 학습된 모델 가중치 (용량 큼)
+weights/
+
+# 업로드/출력 임시 파일
+uploads/
+output/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pth
+*.npz
+
+# 임시 분석 파일
+face_paper.txt
+pbe_paper.txt
+
+# IDE / Claude
+.claude/
+
+# 환경
+.env
+*.log

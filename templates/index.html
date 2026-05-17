@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pinto Studio — AI 자동보정</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:    #0d0d12;
+      --surf:  #14141c;
+      --card:  #1a1a26;
+      --bdr:   #28283a;
+      --gold:  #c8a96e;
+      --text:  #e8e8e8;
+      --muted: #686878;
+      --green: #4caf50;
+      --red:   #ef5350;
+      --blue:  #42a5f5;
+    }
+    body {
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surf);
+      border-bottom: 1px solid var(--bdr);
+      padding: 0 36px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    .logo     { font-size: 1.3rem; font-weight: 700; color: var(--gold); letter-spacing: 3px; }
+    .logo-sub { font-size: 0.74rem; color: var(--muted); margin-top: 1px; }
+    .svc-badge {
+      margin-left: auto;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .svc-ok   { background: #1a3a1a; color: var(--green); border: 1px solid var(--green); }
+    .svc-off  { background: #2a1a1a; color: var(--red);   border: 1px solid var(--red); }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .card {
+      background: var(--surf);
+      border: 1px solid var(--bdr);
+      border-radius: 16px;
+      padding: 40px 44px;
+      width: 100%;
+      max-width: 680px;
+    }
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+    .card-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 28px;
+      line-height: 1.6;
+    }
+
+    /* ── 업로드 영역 ── */
+    .drop-zone {
+      border: 2px dashed var(--bdr);
+      border-radius: 12px;
+      padding: 48px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.22s;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--gold);
+      background: rgba(200, 169, 110, 0.04);
+    }
+    .drop-zone.has-files {
+      border-color: var(--gold);
+      border-style: solid;
+    }
+    .dz-icon { font-size: 3rem; margin-bottom: 12px; }
+    .dz-text { font-size: 0.95rem; color: var(--text); margin-bottom: 4px; }
+    .dz-sub  { font-size: 0.78rem; color: var(--muted); }
+    #file-input { display: none; }
+
+    /* ── 파일 목록 ── */
+    .file-list {
+      background: var(--card);
+      border: 1px solid var(--bdr);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .fl-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--bdr);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .fl-scroll { max-height: 200px; overflow-y: auto; }
+    .fl-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      gap: 10px;
+      border-bottom: 1px solid var(--bdr);
+      font-size: 0.8rem;
+    }
+    .fl-item:last-child { border-bottom: none; }
+    .fl-item .fname { flex: 1; }
+    .fl-item .fsize { color: var(--muted); font-size: 0.72rem; }
+    .fl-item .fstat { font-size: 0.75rem; color: var(--muted); }
+    .fl-item .fstat.done { color: var(--green); }
+    .fl-item .fstat.err  { color: var(--red); }
+
+    /* ── 버튼 ── */
+    .btn-retouch {
+      width: 100%;
+      padding: 14px;
+      background: var(--gold);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      transition: background 0.2s;
+    }
+    .btn-retouch:hover:not(:disabled) { background: #d9ba80; }
+    .btn-retouch:disabled { background: #4a3a20; color: #7a6a40; cursor: not-allowed; }
+
+    /* ── 진행 상태 ── */
+    .progress-wrap {
+      margin-top: 16px;
+      display: none;
+    }
+    .progress-bar-bg {
+      background: var(--card);
+      border-radius: 6px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 6px;
+      transition: width 0.3s;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer {
+      0%   { opacity: 1; }
+      50%  { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+    .progress-text {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ── 미리보기 (단일) ── */
+    .preview-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 24px;
+      display: none;
+    }
+    .pv-box {
+      background: var(--card);
+      border: 1px solid var(--bdr);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .pv-label {
+      padding: 8px 12px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--bdr);
+      letter-spacing: 0.6px;
+    }
+    .pv-img {
+      padding: 10px;
+      text-align: center;
+    }
+    .pv-img img { max-width: 100%; border-radius: 6px; }
+
+    /* ── 서비스 점검 중 ── */
+    .offline-msg {
+      text-align: center;
+      padding: 32px 0;
+    }
+    .offline-msg .icon { font-size: 3rem; margin-bottom: 14px; }
+    .offline-msg p { color: var(--muted); font-size: 0.88rem; line-height: 1.7; }
+
+    /* ── 토스트 ── */
+    #toast {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      background: var(--card);
+      color: var(--text);
+      padding: 11px 18px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      transform: translateY(60px); opacity: 0;
+      transition: all .3s;
+      pointer-events: none;
+      max-width: 300px;
+    }
+    #toast.show  { transform: translateY(0); opacity: 1; }
+    #toast.ok    { border-left: 4px solid var(--green); }
+    #toast.fail  { border-left: 4px solid var(--red); }
+    #toast.info  { border-left: 4px solid var(--blue); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 18px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      border-top: 1px solid var(--bdr);
+      flex-shrink: 0;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--surf); }
+    ::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:1.5rem">📷</span>
+  <div>
+    <div class="logo">PINTO STUDIO</div>
+    <div class="logo-sub">AI 자동보정 서비스</div>
+  </div>
+  {% if model_ready %}
+    <span class="svc-badge svc-ok">서비스 이용 가능 ✓</span>
+  {% else %}
+    <span class="svc-badge svc-off">서비스 준비 중</span>
+  {% endif %}
+</header>
+
+<main>
+  <div class="card">
+
+    {% if not model_ready %}
+    <!-- 서비스 준비 중 -->
+    <div class="offline-msg">
+      <div class="icon">🛠</div>
+      <p>현재 AI 보정 모델 업데이트 중입니다.<br>잠시 후 다시 방문해주세요.</p>
+    </div>
+
+    {% else %}
+    <!-- 서비스 이용 가능 -->
+    <div class="card-title">원본 사진 업로드</div>
+    <div class="card-desc">
+      촬영된 원본 사진을 업로드하시면 AI가 자동으로 보정해드립니다.<br>
+      여러 장을 한 번에 업로드하면 ZIP 파일로 받으실 수 있습니다.
+    </div>
+
+    <!-- 드롭존 -->
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="dz-icon" id="dz-icon">📂</div>
+      <div class="dz-text" id="dz-text">사진을 드래그하거나 클릭해서 업로드</div>
+      <div class="dz-sub"  id="dz-sub">JPG / PNG / TIFF · 여러 장 가능</div>
+    </div>
+    <input type="file" id="file-input" multiple accept="image/*" onchange="onFileSel(this.files)" />
+
+    <!-- 파일 목록 -->
+    <div class="file-list" id="file-list">
+      <div class="fl-header">
+        <span id="fl-count"></span>
+        <span id="fl-size"></span>
+      </div>
+      <div class="fl-scroll" id="fl-scroll"></div>
+    </div>
+
+    <!-- 버튼 -->
+    <button class="btn-retouch" id="btn-retouch" onclick="doRetouch()" disabled>
+      AI 보정하기
+    </button>
+
+    <!-- 진행 -->
+    <div class="progress-wrap" id="prog">
+      <div class="progress-bar-bg">
+        <div class="progress-bar" id="prog-bar" style="width:0%"></div>
+      </div>
+      <div class="progress-text" id="prog-text">처리 중...</div>
+    </div>
+
+    <!-- 단일 파일 미리보기 -->
+    <div class="preview-row" id="preview-row">
+      <div class="pv-box">
+        <div class="pv-label">원본</div>
+        <div class="pv-img"><img id="prev-orig" /></div>
+      </div>
+      <div class="pv-box">
+        <div class="pv-label">✨ AI 보정</div>
+        <div class="pv-img"><img id="prev-ret" /></div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</main>
+
+<footer>
+  © Pinto Studio · AI 자동보정 서비스
+</footer>
+
+<div id="toast"></div>
+
+<script>
+  const MODEL_READY = {{ 'true' if model_ready else 'false' }};
+  let selectedFiles = null;
+
+  /* ── 드래그앤드롭 ── */
+  const dz = document.getElementById('drop-zone');
+  if (dz) {
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.classList.remove('drag-over');
+      onFileSel(e.dataTransfer.files);
+    });
+  }
+
+  function onFileSel(files) {
+    if (!files || !files.length) return;
+    selectedFiles = files;
+    dz.classList.add('has-files');
+
+    document.getElementById('dz-icon').textContent = '🖼';
+    document.getElementById('dz-text').textContent = `${files.length}장 선택됨`;
+    document.getElementById('dz-sub').textContent  = '다른 파일로 교체하려면 다시 클릭';
+
+    let total = 0;
+    const scroll = document.getElementById('fl-scroll');
+    scroll.innerHTML = '';
+    for (const f of files) {
+      total += f.size;
+      scroll.innerHTML += `
+        <div class="fl-item">
+          <span class="fname">🖼 ${f.name}</span>
+          <span class="fsize">${(f.size / 1024 / 1024).toFixed(1)} MB</span>
+          <span class="fstat" id="stat-${encodeURIComponent(f.name)}">대기</span>
+        </div>`;
+    }
+    document.getElementById('fl-count').textContent = `${files.length}장`;
+    document.getElementById('fl-size').textContent  = `총 ${(total / 1024 / 1024).toFixed(1)} MB`;
+    document.getElementById('file-list').style.display = 'block';
+    document.getElementById('btn-retouch').disabled    = false;
+    document.getElementById('preview-row').style.display = 'none';
+  }
+
+  /* ── 보정 요청 ── */
+  async function doRetouch() {
+    if (!selectedFiles || !selectedFiles.length) return;
+
+    const btn  = document.getElementById('btn-retouch');
+    const prog = document.getElementById('prog');
+    const bar  = document.getElementById('prog-bar');
+    const txt  = document.getElementById('prog-text');
+    btn.disabled = true;
+    prog.style.display = 'block';
+    bar.style.width    = '10%';
+    txt.textContent    = '서버에 전송 중...';
+
+    const fd = new FormData();
+    const isSingle = selectedFiles.length === 1;
+
+    if (isSingle) {
+      fd.append('image', selectedFiles[0]);
+    } else {
+      for (const f of selectedFiles) fd.append('images', f);
+    }
+
+    bar.style.width = '30%';
+    txt.textContent = 'AI 보정 처리 중... (사진 수에 따라 수 분 소요)';
+
+    try {
+      const res = await fetch('/retouch', { method: 'POST', body: fd });
+      bar.style.width = '90%';
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || '서버 오류');
+      }
+
+      if (isSingle) {
+        /* 단일: 미리보기 표시 */
+        const data = await res.json();
+        const orig = selectedFiles[0];
+        const reader = new FileReader();
+        reader.onload = e => { document.getElementById('prev-orig').src = e.target.result; };
+        reader.readAsDataURL(orig);
+        document.getElementById('prev-ret').src  = 'data:image/jpeg;base64,' + data.image;
+        document.getElementById('preview-row').style.display = 'grid';
+
+        /* 다운로드 버튼 추가 */
+        const a = document.createElement('a');
+        a.href     = 'data:image/jpeg;base64,' + data.image;
+        a.download = orig.name.replace(/\.[^.]+$/, '') + '_retouched.jpg';
+        a.click();
+        toast('보정 완료! 이미지를 다운로드합니다.', 'ok');
+      } else {
+        /* 복수: ZIP 다운로드 */
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href     = URL.createObjectURL(blob);
+        a.download = 'pinto_retouched.zip';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast(`${selectedFiles.length}장 보정 완료! ZIP 다운로드`, 'ok');
+      }
+
+      bar.style.width = '100%';
+      txt.textContent = '완료!';
+    } catch (e) {
+      txt.textContent = '오류: ' + e.message;
+      toast(e.message, 'fail');
+    } finally {
+      btn.disabled = false;
+      setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 2000);
+    }
+  }
+
+  /* ── 토스트 ── */
+  function toast(msg, type = 'info') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `show ${type}`;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = ''; }, 4000);
+  }
+</script>
+</body>
+</html>
