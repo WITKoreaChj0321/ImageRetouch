@@ -218,7 +218,7 @@ def admin_status():
 
 if __name__ == "__main__":
     if model_ready():
-        print(f"[Model] generator.pth 존재 — 서비스 준비됨")
+        print(f"[Model] generator.pth 존재. 서비스 준비됨")
     else:
         print(f"[Warn] generator.pth 없음. /admin 에서 모델을 업로드하세요")
     app.run(debug=True, host="0.0.0.0", port=5000)
